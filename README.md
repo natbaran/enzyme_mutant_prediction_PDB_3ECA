@@ -5,6 +5,7 @@ An end-to-end pipeline that proposes stabilizing point mutations for a therapeut
 ## Why this matters
 
 Enzyme stability is a precondition for using a biological catalyst outside a sterile lab: industrial biocatalysis, detergents, diagnostics, bioremediation — and, the angle taken here, **enzymes as drugs**. A drug that degrades or gets cleared from the body too quickly needs more frequent dosing, and can trigger immune reactions along the way. Improving intrinsic protein stability is one lever for addressing that, complementary to established approaches like PEGylation.
+Enzyme stability is a precondition for using a biological catalyst outside a sterile lab: industrial biocatalysis, detergents, diagnostics, bioremediation — and, the angle taken here, **enzymes as drugs**. A drug that degrades or gets cleared from the body too quickly needs more frequent dosing, and can trigger immune reactions along the way. Improving intrinsic protein stability is one lever for addressing that, complementary to established approaches like PEGylation.
 
 ## Target enzyme: E. coli L-asparaginase II (PDB [3ECA](https://www.rcsb.org/structure/3ECA))
 
@@ -14,20 +15,20 @@ Its clinical limitation is genuine and well documented: short serum half-life, i
 
 A few structural facts worth knowing before reading the results below:
 - The protein is a **homotetramer** (chains A/B/C/D, all identical sequence) — a **"dimer of dimers"**, not a symmetric ring: chain A shares a large, tight interface with chain C (~65 contacting residues), and much smaller, roughly-equal secondary interfaces with B and D (~28-30 residues each).
-- The active site is formed **within each chain**, not between two different catalytic residues on different chains: the two known catalytic residues, Thr12 and Thr89, sit ~7.5 Å apart *within the same chain* — one shared active site per chain, so **4 chains → 4 active sites**, not 8. But each site's pocket is only fully formed with help from the tight-dimer partner chain, which is why the whole inter-subunit interface (112 of 327 chain-A residues, ~34%) matters for mutation safety, not just the two catalytic residues themselves.
+- The active site is formed **within each chain**, not between two different catalytic residues on different chains: the two known catalytic residues, Thr12 and Thr89, sit ~7.5 Å apart *within the same chain* — one shared active site per chain, so **4 chains → 4 active sites**, not 8. But each site's pocket is only fully formed with help from the tight-dimer partner chain, which is why the whole inter-subunit interface (111 of 326 chain-A residues, ~34%) matters for mutation safety, not just the two catalytic residues themselves.
 
 ## Pipeline
 
 Four Jupyter notebooks, each consuming the previous one's output:
 
-| # | Notebook | What it does | Where it runs |
+| # | Notebook | What it does | GPU needed? |
 |---|---|---|---|
-| 01 | [`target_selection`](notebooks/01_target_selection.ipynb) | Downloads 3ECA from the PDB, confirms the tetramer, extracts the chain A sequence from resolved coordinates, sanity-checks composition and the catalytic residues, saves a reference FASTA. | Local (lightweight) |
-| 02 | [`esm_mutation_scoring`](notebooks/02_esm_mutation_scoring.ipynb) | Zero-shot masked-marginal scoring with ESM-2 (650M): masks each position in turn and scores every possible substitution by how "evolutionarily natural" the model finds it (Meier et al., 2021). Flags substitutions at the catalytic residues. | Colab (GPU) |
-| 03 | [`structure_prediction`](notebooks/03_structure_prediction.ipynb) | Folds the wild type and the top ESM-2 candidates with ESMFold (via the free ESM Atlas API), checks fold confidence (pLDDT), and computes the *real* inter-subunit interface from the notebook-01 crystal structure to flag any candidate sitting at a subunit contact. | Local (CPU-only — no GPU needed) |
-| 04 | [`nnp_stability_scoring`](notebooks/04_nnp_stability_scoring.ipynb) | Grafts each mutation onto a shared reference structure (Kabsch superposition), relaxes the local pocket around it with the MACE-OFF23 neural network potential, and compares atomization energy against the wild type as a ΔΔG-like stability proxy. Combines all three signals into a final ranking, with a py3Dmol visualization of the top candidates. | Colab (GPU recommended) |
+| 01 | [`target_selection`](notebooks/01_target_selection.ipynb) | Downloads 3ECA from the PDB, confirms the tetramer, extracts the chain A sequence from resolved coordinates, sanity-checks composition and the catalytic residues, saves a reference FASTA. | No |
+| 02 | [`esm_mutation_scoring`](notebooks/02_esm_mutation_scoring.ipynb) | Zero-shot masked-marginal scoring with ESM-2 (650M): masks each position in turn and scores every possible substitution by how "evolutionarily natural" the model finds it (Meier et al., 2021). Flags substitutions at the catalytic residues. | Yes |
+| 03 | [`structure_prediction`](notebooks/03_structure_prediction.ipynb) | Folds the wild type and the top ESM-2 candidates with ESMFold (via the free ESM Atlas API), checks fold confidence (pLDDT), and computes the *real* inter-subunit interface from the notebook-01 crystal structure to flag any candidate sitting at a subunit contact. | No |
+| 04 | [`nnp_stability_scoring`](notebooks/04_nnp_stability_scoring.ipynb) | Grafts each mutation onto a shared reference structure (Kabsch superposition), relaxes the local pocket around it with the MACE-OFF23 neural network potential, and compares atomization energy against the wild type as a ΔΔG-like stability proxy. Combines all three signals into a final ranking, with a py3Dmol visualization of the top candidates. | Recommended |
 
-Each notebook is self-contained and reads/writes to `data/` and `results/`.
+Each notebook is self-contained, runs in Google Colab, and reads/writes to `data/` and `results/` on Google Drive so outputs carry over automatically from one notebook to the next.
 
 ## Results
 
@@ -52,34 +53,34 @@ Two findings worth calling out:
 
 ## Getting started
 
-### Notebook 01 and 03 — run locally
+### Run everything in Google Colab (recommended)
 
-These are lightweight (Biopython/pandas/py3Dmol only) and don't need a GPU.
+All four notebooks install their own dependencies inline (`%pip install ...`) and mount Google Drive, so no local setup is needed.
+
+1. Upload this project folder to Google Drive (e.g. `MyDrive/enzyme-design-ai/`), keeping the `data/`, `notebooks/`, and `results/` structure.
+2. Open a notebook from Google Drive directly — right-click the `.ipynb` file → **Open with Google Colaboratory** (more reliable than Colab's own "Open notebook" file picker for freshly-uploaded files).
+3. The first code cell mounts your Drive and `cd`s into the project folder — edit the `PROJECT_DIR` variable there if your folder name/location differs.
+4. For notebooks 02 and 04: `Runtime` → `Change runtime type` → select a **T4 GPU** (notebook 04 also works on CPU, just slower). Notebooks 01 and 03 don't need a GPU.
+5. `Runtime` → `Run all`.
+6. Run the notebooks in order (01 → 02 → 03 → 04) — since they all read/write through the same mounted Drive folder, each notebook's outputs are immediately available to the next with no manual download/upload step.
+
+### Run notebooks 01 and 03 locally instead (optional)
+
+These two are lightweight (Biopython/pandas only) and don't need a GPU, so they can also run outside Colab if you prefer:
 
 ```bash
 python -m venv .venv
 .venv/Scripts/pip install -r requirements.txt   # Windows; use .venv/bin/pip on macOS/Linux
 ```
 
-In VS Code: open the notebook, pick the `.venv` interpreter as the kernel, run cells top to bottom.
-
-### Notebooks 02 and 04 — run in Google Colab
-
-These need PyTorch + a GPU (ESM-2 is a 650M-parameter model; MACE-OFF23 is much lighter but benefits from GPU too). They're written to install their own dependencies inline (`%pip install ...`) — no local setup needed.
-
-1. Upload this project folder to Google Drive (e.g. `MyDrive/enzyme-design-ai/`), keeping the `data/`, `notebooks/`, and `results/` structure.
-2. Open the notebook from Google Drive directly — right-click the `.ipynb` file → **Open with Google Colaboratory** (more reliable than Colab's own "Open notebook" file picker for freshly-uploaded files).
-3. The first cell mounts your Drive and `cd`s into the project folder — edit the `PROJECT_DIR` variable there if your folder name/location differs.
-4. `Runtime` → `Change runtime type` → select a **T4 GPU**.
-5. `Runtime` → `Run all`.
-6. Download the notebook's output files (`results/*.csv`, `results/structures*/`) back into your local copy of the repo so later notebooks (and the local ones) can use them.
+In VS Code: open the notebook, pick the `.venv` interpreter as the kernel, run cells top to bottom. Notebooks 02 and 04 still need Colab (or a local GPU + PyTorch/mace-torch install, not covered here).
 
 ## Repo structure
 
 ```
 .
 ├── README.md
-├── requirements.txt          # local, lightweight deps (biopython, pandas, py3Dmol, ipykernel)
+├── requirements.txt          # local, lightweight deps for notebooks 01/03 (biopython, pandas, ipykernel)
 ├── data/
 │   ├── 3eca_chainA.fasta     # reference sequence (notebook 01 output)
 │   └── pdb/pdb3eca.ent       # downloaded crystal structure (notebook 01 output)
